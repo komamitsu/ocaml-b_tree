@@ -32,40 +32,43 @@ module BTreeMake (Record : sig
       in
       _is_leaf 0
 
-    let insert_key_and_ptr page record ptr =
+    let find_ins_idx page record =
       let page_size = get_page_size page in
-      let rec _insert idx_src idx_dst new_page inserted =
-        if idx_src > page_size then (
-          new_page.ptrs.(page_size + 1) <- page.ptrs.(page_size);
-          new_page
-        )
-        else (
-          match page.recs.(idx_src) with
-          | Some (k, v) -> 
-              if not inserted && Record.compare k (fst record) >= 0 then (
-                new_page.recs.(idx_dst) <- Some record;
-                new_page.recs.(idx_dst + 1) <- Some (k, v);
-                new_page.ptrs.(idx_dst) <- page.ptrs.(idx_src);
-                new_page.ptrs.(idx_dst + 1) <- ptr;
-                _insert (idx_src + 1) (idx_dst + 1 + 1) new_page true
-              )
-              else (
-                new_page.recs.(idx_dst) <- Some (k, v);
-                new_page.ptrs.(idx_dst) <- page.ptrs.(idx_src);
-                new_page.ptrs.(idx_dst) <- page.ptrs.(idx_src);
-                _insert (idx_src + 1) (idx_dst + 1) new_page inserted
-              )
-          | None -> 
-              if not inserted then (
-                new_page.recs.(idx_dst) <- Some record;
-                new_page.ptrs.(idx_dst + 1) <- ptr
-              );
-              new_page.ptrs.(idx_dst) <- page.ptrs.(idx_src);
-              new_page
-        )
+      let rec _find i =
+        if i >= page_size then i
+        else 
+          match page.recs.(i) with
+          | Some (k, v) when Record.compare k (fst record) >= 0 -> i
+          | Some (k, v) -> _find (i + 1)
+          | None -> i
       in
-      _insert 0 0 (create_page (get_page_size page)) false
+      _find 0
 
+    let insert_rec_and_ptr page record ptr =
+      let ins_pos = find_ins_idx page record in
+      let valid_recs_size = (Array.length page.recs) - 1 in
+      let valid_ptrs_size = (Array.length page.ptrs) - 1 in
+      let left_recs = Array.sub page.recs 0 ins_pos in
+      let right_recs = 
+        Array.sub page.recs ins_pos (valid_recs_size - ins_pos) in
+      let left_ptrs = Array.sub page.ptrs 0 (ins_pos + 1) in
+      let right_ptrs = 
+        Array.sub page.ptrs (ins_pos + 1) (valid_ptrs_size - ins_pos - 1) in
+(*
+Printf.printf "Start -----------------------\n";
+Printf.printf "page => "; Std.print page;
+Printf.printf "record => "; Std.print record;
+Printf.printf "ins_pos => "; Std.print ins_pos;
+Printf.printf "valid_recs_size => "; Std.print valid_recs_size;
+Printf.printf "valid_ptrs_size => "; Std.print valid_ptrs_size;
+Printf.printf "left_recs => "; Std.print left_recs;
+Printf.printf "right_recs => "; Std.print right_recs;
+Printf.printf "left_ptrs => "; Std.print left_ptrs;
+Printf.printf "right_ptrs => "; Std.print right_ptrs;
+*)
+      { recs = (Array.append left_recs (Array.append [|Some record|] right_recs));
+        ptrs = (Array.append left_ptrs (Array.append [|ptr|] right_ptrs)) }
+      
     let split_page page =
       let page_size = get_page_size page in
       let mid_pos = page_size / 2 in
@@ -90,21 +93,10 @@ module BTreeMake (Record : sig
       let l, r = _split 0 (create_page page_size) (create_page page_size) in
       (page.recs.(page_size / 2), l, r)
 
-    let find_ins_idx page record =
-      let page_size = get_page_size page in
-      let rec _find i =
-        if i >= page_size then i
-        else 
-          match page.recs.(i) with
-          | Some (k, v) when Record.compare k (fst record) >= 0 -> i
-          | _ -> _find (i + 1)
-      in
-      _find 0
-
     let insert page key value =
       let rec _insert page record ptr splited =
         if splited || is_leaf page then (
-          let new_page = insert_key_and_ptr page record ptr in
+          let new_page = insert_rec_and_ptr page record ptr in
           match new_page.recs.(get_page_size new_page) with
           | Some _ ->
             let center_key, left_pages, right_pages =
@@ -174,7 +166,7 @@ module IntBTree = BTreeMake(struct
 open IntBTree
 
 let _ =
-  (* insert_key_and_ptr *)
+  (* insert_rec_and_ptr *)
   let page = 
     { recs = [|Some (4, "four"); Some (8, "eight"); None|];
       ptrs = [|
@@ -185,7 +177,7 @@ let _ =
       |] } in
 
   let tmp_page = 
-    insert_key_and_ptr page (2, "two")
+    insert_rec_and_ptr page (2, "two")
       (Some { recs = [|Some (3, "three"); None; None|]; ptrs = [|None; None; None; None|] })
   in
   assert (
@@ -198,7 +190,7 @@ let _ =
       |] } = tmp_page);
 
   let tmp_page = 
-    insert_key_and_ptr page (6, "six") 
+    insert_rec_and_ptr page (6, "six") 
       (Some { recs = [|Some (7, "seven"); None; None|]; ptrs = [|None; None; None; None|] })
   in
   assert (
@@ -211,7 +203,7 @@ let _ =
       |] } = tmp_page);
 
   let tmp_page = 
-    insert_key_and_ptr page (10, "ten")
+    insert_rec_and_ptr page (10, "ten")
       (Some { recs = [|Some (11, "eleven"); None; None|]; ptrs = [|None; None; None; None|] })
   in
   assert (
@@ -226,15 +218,16 @@ let _ =
   let page = create_page 2 in
   assert ({ recs = [|None; None; None|];
             ptrs = [|None; None; None; None|] } = page);
-  let page = insert_key_and_ptr page (10, "ten") None in
+  let page = insert_rec_and_ptr page (10, "ten") None in
+Std.print page;
   assert ({ recs = [|Some (10, "ten"); None; None|];
             ptrs = [|None; None; None; None|] } = page);
-  let page = insert_key_and_ptr page (4, "four") None in
+  let page = insert_rec_and_ptr page (4, "four") None in
   assert ({ recs = [|Some (4, "four"); Some (10, "ten"); None|];
             ptrs = [|None; None; None; None|] } = page);
-  let page = insert_key_and_ptr page (7, "seven") 
+  let page = insert_rec_and_ptr page (7, "seven") 
               (Some { recs = [|Some (8, "eight"); None; None|];
-                     ptrs = [|None; None; None; None|] })
+                      ptrs = [|None; None; None; None|] })
   in
   assert ({ recs = [|Some (4, "four"); Some (7, "seven"); Some (10, "ten")|];
             ptrs = [|None;
