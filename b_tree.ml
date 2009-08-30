@@ -54,18 +54,6 @@ module BTreeMake (Record : sig
       let left_ptrs = Array.sub page.ptrs 0 (ins_pos + 1) in
       let right_ptrs = 
         Array.sub page.ptrs (ins_pos + 1) (valid_ptrs_size - ins_pos - 1) in
-(*
-Printf.printf "Start -----------------------\n";
-Printf.printf "page => "; Std.print page;
-Printf.printf "record => "; Std.print record;
-Printf.printf "ins_pos => "; Std.print ins_pos;
-Printf.printf "valid_recs_size => "; Std.print valid_recs_size;
-Printf.printf "valid_ptrs_size => "; Std.print valid_ptrs_size;
-Printf.printf "left_recs => "; Std.print left_recs;
-Printf.printf "right_recs => "; Std.print right_recs;
-Printf.printf "left_ptrs => "; Std.print left_ptrs;
-Printf.printf "right_ptrs => "; Std.print right_ptrs;
-*)
       { recs = (Array.append left_recs (Array.append [|Some record|] right_recs));
         ptrs = (Array.append left_ptrs (Array.append [|ptr|] right_ptrs)) }
       
@@ -73,25 +61,20 @@ Printf.printf "right_ptrs => "; Std.print right_ptrs;
       let page_size = get_page_size page in
       let mid_pos = page_size / 2 in
       let rec _split i l r =
-        if i > page_size then l, r
-        else (
-          if i < mid_pos then (
+        match () with
+        | _ when i > page_size -> l, r
+        | _ when i < mid_pos ->
             l.recs.(i) <- page.recs.(i);
             l.ptrs.(i) <- page.ptrs.(i);
             _split (i + 1) l r
-          )
-          else (
-            if i > mid_pos then (
+        | _ when i > mid_pos ->
               r.recs.(i - mid_pos - 1) <- page.recs.(i);
               r.ptrs.(i - mid_pos - 1) <- page.ptrs.(i);
               _split (i + 1) l r
-            )
-            else _split (i + 1) l r
-          )
-        )
+        | _ -> _split (i + 1) l r
       in
       let l, r = _split 0 (create_page page_size) (create_page page_size) in
-      (page.recs.(page_size / 2), l, r)
+      (page.recs.(mid_pos), l, r)
 
     let insert page key value =
       let rec _insert page record ptr splited =
@@ -219,7 +202,6 @@ let _ =
   assert ({ recs = [|None; None; None|];
             ptrs = [|None; None; None; None|] } = page);
   let page = insert_rec_and_ptr page (10, "ten") None in
-Std.print page;
   assert ({ recs = [|Some (10, "ten"); None; None|];
             ptrs = [|None; None; None; None|] } = page);
   let page = insert_rec_and_ptr page (4, "four") None in
@@ -237,6 +219,7 @@ Std.print page;
                      None|] } = page);
   (* split_page *)
   let center_key, left_pages, right_pages = split_page page in
+Std.print left_pages;
   assert (Some (7, "seven") = center_key);
   assert ({ recs = [|Some (4, "four"); None; None|];
             ptrs = [|None; None; None; None|] } = left_pages);
