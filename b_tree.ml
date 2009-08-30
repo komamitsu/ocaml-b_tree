@@ -23,18 +23,18 @@ module BTreeMake (Record : sig
 
     let is_leaf page =
       let page_size = get_page_size page in
-      let rec loop i =
+      let rec _is_leaf i =
         if i >= page_size then true
         else 
           match page.ptrs.(i) with
           | Some _ -> false
-          | None -> loop (i + 1)
+          | None -> _is_leaf (i + 1)
       in
-      loop 0
+      _is_leaf 0
 
     let insert_key_and_ptr page record ptr =
       let page_size = get_page_size page in
-      let rec loop idx_src idx_dst new_page inserted =
+      let rec _insert idx_src idx_dst new_page inserted =
         if idx_src > page_size then (
           new_page.ptrs.(page_size + 1) <- page.ptrs.(page_size);
           new_page
@@ -47,13 +47,13 @@ module BTreeMake (Record : sig
                 new_page.recs.(idx_dst + 1) <- Some (k, v);
                 new_page.ptrs.(idx_dst) <- page.ptrs.(idx_src);
                 new_page.ptrs.(idx_dst + 1) <- ptr;
-                loop (idx_src + 1) (idx_dst + 1 + 1) new_page true
+                _insert (idx_src + 1) (idx_dst + 1 + 1) new_page true
               )
               else (
                 new_page.recs.(idx_dst) <- Some (k, v);
                 new_page.ptrs.(idx_dst) <- page.ptrs.(idx_src);
                 new_page.ptrs.(idx_dst) <- page.ptrs.(idx_src);
-                loop (idx_src + 1) (idx_dst + 1) new_page inserted
+                _insert (idx_src + 1) (idx_dst + 1) new_page inserted
               )
           | None -> 
               if not inserted then (
@@ -64,42 +64,42 @@ module BTreeMake (Record : sig
               new_page
         )
       in
-      loop 0 0 (create_page (get_page_size page)) false
+      _insert 0 0 (create_page (get_page_size page)) false
 
     let split_page page =
       let page_size = get_page_size page in
       let mid_pos = page_size / 2 in
-      let rec loop i l r =
+      let rec _split i l r =
         if i > page_size then l, r
         else (
           if i < mid_pos then (
             l.recs.(i) <- page.recs.(i);
             l.ptrs.(i) <- page.ptrs.(i);
-            loop (i + 1) l r
+            _split (i + 1) l r
           )
           else (
             if i > mid_pos then (
               r.recs.(i - mid_pos - 1) <- page.recs.(i);
               r.ptrs.(i - mid_pos - 1) <- page.ptrs.(i);
-              loop (i + 1) l r
+              _split (i + 1) l r
             )
-            else loop (i + 1) l r
+            else _split (i + 1) l r
           )
         )
       in
-      let l, r = loop 0 (create_page page_size) (create_page page_size) in
+      let l, r = _split 0 (create_page page_size) (create_page page_size) in
       (page.recs.(page_size / 2), l, r)
 
     let find_ins_idx page record =
       let page_size = get_page_size page in
-      let rec loop i =
+      let rec _find i =
         if i >= page_size then i
         else 
           match page.recs.(i) with
           | Some (k, v) when Record.compare k (fst record) >= 0 -> i
-          | _ -> loop (i + 1)
+          | _ -> _find (i + 1)
       in
-      loop 0
+      _find 0
 
     let insert page key value =
       let rec _insert page record ptr splited =
@@ -143,6 +143,27 @@ module BTreeMake (Record : sig
       in
       let _, updated_page = _insert page (key, value) None false in
       updated_page
+
+    let find page key =
+      let page_size = get_page_size page in
+      let rec _find page =
+        let rec _search_keys i =
+          if i >= page_size then 
+            match page.ptrs.(page_size) with
+            | Some p -> _find p
+            | None -> None
+          else 
+            match page.recs.(i) with
+            | Some (k, v) when Record.compare k key = 0 -> Some v
+            | Some (k, v) when Record.compare k key < 0 -> _search_keys (i + 1)
+            | _ ->
+                match page.ptrs.(i) with
+                | Some p -> _find p
+                | None -> None
+        in
+        _search_keys 0
+      in
+      _find page
   end
 
 module IntBTree = BTreeMake(struct
@@ -268,5 +289,13 @@ let _ =
               Some { recs = [|Some (10, "ten"); None; None|];
                      ptrs = [|None; None; None; None|] }; 
               None
-            |] } = page)
+            |] } = page);
+  (* find *)
+  assert (None = find page 1);
+  assert (Some "two" = find page 2);
+  assert (Some "three" = find page 3);
+  assert (Some "four" = find page 4);
+  assert (Some "seven" = find page 7);
+  assert (Some "ten" = find page 10);
+  assert (None = find page 11)
 
