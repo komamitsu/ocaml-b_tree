@@ -32,29 +32,16 @@ module BTreeMake (Record : sig
       loop 0
 
     let insert_key_and_ptr page key ptr =
-Printf.printf "=== insert_key_and_ptr start === \n";
-Printf.printf "key => "; Std.print key;
       let page_size = get_page_size page in
       let rec loop idx_src idx_dst new_page inserted =
-Printf.printf "idx_src => "; Std.print idx_src;
-Printf.printf "idx_dst => "; Std.print idx_dst;
-Printf.printf "new_page => "; Std.print new_page;
-Printf.printf "inserted => "; Std.print inserted;
         if idx_src > page_size then (
-Printf.printf "Exit ! \n";
           new_page.ptrs.(page_size + 1) <- page.ptrs.(page_size);
           new_page
         )
         else (
-Printf.printf "Inserting ! \n";
-Printf.printf "idx_dst => "; Std.print idx_dst;
-Printf.printf "idx_src => "; Std.print idx_src;
           match page.keys.(idx_src) with
           | Some k -> 
-Printf.printf "Some k \n";
-flush stdout;
               if not inserted && Record.compare k key >= 0 then (
-Printf.printf "  insert\n";
                 new_page.keys.(idx_dst) <- Some key;
                 new_page.keys.(idx_dst + 1) <- Some k;
                 new_page.ptrs.(idx_dst) <- page.ptrs.(idx_src);
@@ -62,17 +49,13 @@ Printf.printf "  insert\n";
                 loop (idx_src + 1) (idx_dst + 1 + 1) new_page true
               )
               else (
-Printf.printf "  not insert\n";
                 new_page.keys.(idx_dst) <- Some k;
                 new_page.ptrs.(idx_dst) <- page.ptrs.(idx_src);
                 new_page.ptrs.(idx_dst) <- page.ptrs.(idx_src);
                 loop (idx_src + 1) (idx_dst + 1) new_page inserted
               )
           | None -> 
-Printf.printf "None \n";
-flush stdout;
               if not inserted then (
-Printf.printf "  not insert\n";
                 new_page.keys.(idx_dst) <- Some key;
                 new_page.ptrs.(idx_dst + 1) <- ptr
               );
@@ -118,18 +101,11 @@ Printf.printf "  not insert\n";
       loop 0
 
     let insert page key =
- Printf.printf "Insert Start\n";
- Std.print page; Printf.printf "key is "; Std.print key;
       let rec _insert page key ptr splited =
- Printf.printf "_insert Start\n";
- Std.print page; Printf.printf "key is "; Std.print key;
- Printf.printf "ptr is "; Std.print ptr;
         if splited || is_leaf page then (
- Printf.printf "leaf\n";
           let new_page = insert_key_and_ptr page key ptr in
           match new_page.keys.(get_page_size new_page) with
           | Some _ ->
- Printf.printf "  full\n";
             let center_key, left_pages, right_pages =
               split_page new_page in
             let node_page = create_page (get_page_size page) in
@@ -138,20 +114,14 @@ Printf.printf "  not insert\n";
             node_page.ptrs.(1) <- Some right_pages;
             (true, node_page)
           | None -> 
- Printf.printf "  not full\n";
               (false, new_page)
         )
         else (
- Printf.printf "not leaf\n";
           let i = find_ins_idx page key in
             match page.ptrs.(i) with
             | Some p -> 
- Printf.printf "  ins into child\n";
                 let splited, child_page = _insert p key ptr false in
                 if splited then (
- Printf.printf "  split\n";
- Printf.printf "  child_page\n";
- Std.print child_page;
                   match child_page.keys.(0) with
                   | Some k -> 
                       page.ptrs.(i) <- child_page.ptrs.(0);
@@ -161,12 +131,10 @@ Printf.printf "  not insert\n";
                   | _ -> failwith "insert: invalid key"
                 )
                 else (
- Printf.printf "  no split\n";
                   page.ptrs.(i) <- Some child_page;
                   (false, page)
                 )
             | None -> 
- Printf.printf "  new child\n";
                 let new_page = create_page (get_page_size page) in
                 new_page.keys.(0) <- Some key;
                 (false, new_page)
@@ -197,7 +165,6 @@ let _ =
     insert_key_and_ptr page 2 
       (Some { keys = [|Some 3; None; None|]; ptrs = [|None; None; None; None|] })
   in
-Std.print tmp_page;
   assert (
     { keys = [|Some 2; Some 4; Some 8|];
       ptrs = [|
@@ -211,7 +178,6 @@ Std.print tmp_page;
     insert_key_and_ptr page 6 
       (Some { keys = [|Some 7; None; None|]; ptrs = [|None; None; None; None|] })
   in
-Std.print tmp_page;
   assert (
     { keys = [|Some 4; Some 6; Some 8|];
       ptrs = [|
@@ -225,7 +191,6 @@ Std.print tmp_page;
     insert_key_and_ptr page 10
       (Some { keys = [|Some 11; None; None|]; ptrs = [|None; None; None; None|] })
   in
-Std.print tmp_page;
   assert (
     { keys = [|Some 4; Some 8; Some 10|];
       ptrs = [|
@@ -242,7 +207,6 @@ Std.print tmp_page;
   assert ({ keys = [|Some 10; None; None|];
             ptrs = [|None; None; None; None|] } = page);
   let page = insert_key_and_ptr page 4 None in
-Std.print page;
   assert ({ keys = [|Some 4; Some 10; None|];
             ptrs = [|None; None; None; None|] } = page);
   let page = insert_key_and_ptr page 7 
@@ -293,7 +257,6 @@ Std.print page;
               None
             |] } = page);
   let page = insert page 3 in
-Std.print page;
   assert ({ keys = [|Some 3; Some 7; None|];
             ptrs = [|
               Some { keys = [|Some 2; None; None|];
