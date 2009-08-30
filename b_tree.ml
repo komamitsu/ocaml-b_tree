@@ -1,11 +1,8 @@
-#use "topfind"
-#require "extlib"
-#require "unix"
-
 module BTreeMake (Record : sig
                              type k
                              type v
                              val compare : k -> k -> int
+                             val debug : unit -> unit
                            end) =
   struct
     type page = { 
@@ -45,15 +42,15 @@ module BTreeMake (Record : sig
       _find 0
 
     let insert_rec_and_ptr page record ptr =
-      let ins_pos = find_ins_idx page record in
+      let ins_idx = find_ins_idx page record in
       let valid_recs_size = (Array.length page.recs) - 1 in
       let valid_ptrs_size = (Array.length page.ptrs) - 1 in
-      let left_recs = Array.sub page.recs 0 ins_pos in
+      let left_recs = Array.sub page.recs 0 ins_idx in
       let right_recs = 
-        Array.sub page.recs ins_pos (valid_recs_size - ins_pos) in
-      let left_ptrs = Array.sub page.ptrs 0 (ins_pos + 1) in
+        Array.sub page.recs ins_idx (valid_recs_size - ins_idx) in
+      let left_ptrs = Array.sub page.ptrs 0 (ins_idx + 1) in
       let right_ptrs = 
-        Array.sub page.ptrs (ins_pos + 1) (valid_ptrs_size - ins_pos - 1) in
+        Array.sub page.ptrs (ins_idx + 1) (valid_ptrs_size - ins_idx - 1) in
       { recs = (Array.append left_recs (Array.append [|Some record|] right_recs));
         ptrs = (Array.append left_ptrs (Array.append [|ptr|] right_ptrs)) }
       
@@ -77,44 +74,43 @@ module BTreeMake (Record : sig
       (page.recs.(mid_pos), l, r)
 
     let insert page key value =
+      let page_size = get_page_size page in
       let rec _insert page record ptr splited =
-        if splited || is_leaf page then (
+        if splited || is_leaf page then 
+          (* insert into the page *)
           let new_page = insert_rec_and_ptr page record ptr in
-          match new_page.recs.(get_page_size new_page) with
+          match new_page.recs.(page_size) with
           | Some _ ->
-            let center_key, left_pages, right_pages =
-              split_page new_page in
-            let node_page = create_page (get_page_size page) in
+            let center_key, left_pages, right_pages = split_page new_page in
+            let node_page = create_page page_size in
             node_page.recs.(0) <- center_key;
             node_page.ptrs.(0) <- Some left_pages;
             node_page.ptrs.(1) <- Some right_pages;
             (true, node_page)
-          | None -> 
-              (false, new_page)
-        )
-        else (
-          let i = find_ins_idx page record in
-            match page.ptrs.(i) with
-            | Some p -> 
-                let splited, child_page = _insert p record ptr false in
-                if splited then (
+          | None -> (false, new_page)
+        else 
+          (* insert into the child page *)
+          let ptr_idx = find_ins_idx page record in
+            match page.ptrs.(ptr_idx) with
+            | Some child_page -> 
+                let splited, child_page =
+                  _insert child_page record ptr false in
+                if splited then 
                   match child_page.recs.(0) with
                   | Some r -> 
-                      page.ptrs.(i) <- child_page.ptrs.(0);
+                      page.ptrs.(ptr_idx) <- child_page.ptrs.(0);
                       let splited, new_page = 
                         _insert page r child_page.ptrs.(1) true in
-                      (splited, new_page)
+                      (true, new_page)
                   | _ -> failwith "insert: invalid key"
-                )
                 else (
-                  page.ptrs.(i) <- Some child_page;
+                  page.ptrs.(ptr_idx) <- Some child_page;
                   (false, page)
                 )
             | None -> 
-                let new_page = create_page (get_page_size page) in
+                let new_page = create_page page_size in
                 new_page.recs.(0) <- Some record;
                 (false, new_page)
-        )
       in
       let _, updated_page = _insert page (key, value) None false in
       updated_page
@@ -122,6 +118,7 @@ module BTreeMake (Record : sig
     let find page key =
       let page_size = get_page_size page in
       let rec _find page =
+        Record.debug ();
         let rec _search_keys i =
           if i >= page_size then 
             match page.ptrs.(page_size) with
@@ -141,10 +138,16 @@ module BTreeMake (Record : sig
       _find page
   end
 
+(*
+#use "topfind"
+#require "extlib"
+#require "unix"
+
 module IntBTree = BTreeMake(struct
                               type k = int
                               type v = string
                               let compare a b = a - b
+                              let debug = fun () -> ()
                             end)
 open IntBTree
 
@@ -219,7 +222,6 @@ let _ =
                      None|] } = page);
   (* split_page *)
   let center_key, left_pages, right_pages = split_page page in
-Std.print left_pages;
   assert (Some (7, "seven") = center_key);
   assert ({ recs = [|Some (4, "four"); None; None|];
             ptrs = [|None; None; None; None|] } = left_pages);
@@ -274,4 +276,4 @@ Std.print left_pages;
   assert (Some "seven" = find page 7);
   assert (Some "ten" = find page 10);
   assert (None = find page 11)
-
+*)
