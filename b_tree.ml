@@ -3,18 +3,23 @@ module BTreeMake (Record : sig
                              type v
                              val compare : k -> k -> int
                              val debug : unit -> unit
-                           end) =
+                           end) :
+  sig 
+    type page
+    val create_page : int -> page
+    val insert : page -> Record.k -> Record.v -> page
+    val find : page -> Record.k -> Record.v option
+  end
+=
   struct
     type page = { 
       recs: (Record.k * Record.v) option array;
       ptrs: page option array
     }
 
-    let empty_recs size = Array.make (size + 1) None
-
-    let empty_ptrs size = Array.make (size + 1 + 1) None
-
-    let create_page size = { recs = empty_recs size; ptrs = empty_ptrs size }
+    let create_page size =
+      { recs = (Array.make (size + 1) None);
+        ptrs = (Array.make (size + 1 + 1) None) }
 
     let get_page_size page = (Array.length page.recs) - 1
 
