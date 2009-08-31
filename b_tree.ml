@@ -64,9 +64,14 @@ module BTreeMake (Record : sig
       let mid_pos = page_size / 2 in
       let rec _split i l r =
         match () with
-        | _ when i > page_size -> l, r
+        | _ when i > page_size ->
+            r.ptrs.(i - mid_pos - 1) <- page.ptrs.(i);
+            l, r
         | _ when i < mid_pos ->
             l.recs.(i) <- page.recs.(i);
+            l.ptrs.(i) <- page.ptrs.(i);
+            _split (i + 1) l r
+        | _ when i = mid_pos ->
             l.ptrs.(i) <- page.ptrs.(i);
             _split (i + 1) l r
         | _ when i > mid_pos ->
@@ -81,7 +86,7 @@ module BTreeMake (Record : sig
     let insert page key value =
       let page_size = get_page_size page in
       let rec _insert page record ptr splited =
-        if splited || is_leaf page then 
+        if splited || is_leaf page then
           (* insert into the page *)
           let new_page = insert_rec_and_ptr page record ptr in
           match new_page.recs.(page_size) with
@@ -93,7 +98,7 @@ module BTreeMake (Record : sig
             node_page.ptrs.(1) <- Some right_pages;
             (true, node_page)
           | None -> (false, new_page)
-        else 
+        else  
           (* insert into the child page *)
           let ptr_idx = find_ins_idx page record in
             match page.ptrs.(ptr_idx) with
@@ -106,7 +111,7 @@ module BTreeMake (Record : sig
                       page.ptrs.(ptr_idx) <- child_page.ptrs.(0);
                       let splited, new_page = 
                         _insert page r child_page.ptrs.(1) true in
-                      (true, new_page)
+                      (splited, new_page)
                   | _ -> failwith "insert: invalid key"
                 else (
                   page.ptrs.(ptr_idx) <- Some child_page;
@@ -144,10 +149,6 @@ module BTreeMake (Record : sig
   end
 
 (*
-#use "topfind"
-#require "extlib"
-#require "unix"
-
 module IntBTree = BTreeMake(struct
                               type k = int
                               type v = string
@@ -234,6 +235,29 @@ let _ =
             ptrs = [|Some { recs = [|Some (8, "eight"); None; None|];
                             ptrs = [|None; None; None; None|] };
                      None; None; None|] } = right_pages);
+  let page = 
+    { recs = [|Some (4, "four"); Some (6, "six"); Some (8, "eight")|];
+      ptrs = [|
+        Some { recs = [|Some (2, "two"); None; None|]; ptrs = [|None; None; None; None|] };
+        Some { recs = [|Some (5, "five"); None; None|]; ptrs = [|None; None; None; None|] };
+        Some { recs = [|Some (7, "seven"); None; None|]; ptrs = [|None; None; None; None|] };
+        Some { recs = [|Some (10, "ten"); None; None|]; ptrs = [|None; None; None; None|] }
+      |] } in
+  let center_key, left_pages, right_pages = split_page page in
+  assert (Some (6, "six") = center_key);
+  assert ({ recs = [|Some (4, "four"); None; None|];
+            ptrs = [|
+              Some { recs = [|Some (2, "two"); None; None|]; ptrs = [|None; None; None; None|] };
+              Some { recs = [|Some (5, "five"); None; None|]; ptrs = [|None; None; None; None|] };
+              None;
+              None|] } = left_pages);
+  assert ({ recs = [|Some (8, "eight"); None; None|];
+            ptrs = [|
+              Some { recs = [|Some (7, "seven"); None; None|]; ptrs = [|None; None; None; None|] };
+              Some { recs = [|Some (10, "ten"); None; None|]; ptrs = [|None; None; None; None|] };
+              None;
+              None|] } = right_pages);
+
   (* insert *)
   let page = create_page 2 in
   let page = insert page 10 "ten" in
@@ -282,3 +306,4 @@ let _ =
   assert (Some "ten" = find page 10);
   assert (None = find page 11)
 *)
+
